@@ -1,4 +1,4 @@
-# ESP32 NAT Router with WPA2 Enterprise support
+# ESP32 NAT Router with WPA2 Enterprise and Ethernet support
 
 This is a firmware to use the ESP32 as WiFi NAT router. It can be used as
 - Simple range extender for an existing WiFi network
@@ -8,7 +8,9 @@ This is a firmware to use the ESP32 as WiFi NAT router. It can be used as
 
 It can achieve a bandwidth of more than 15mbps.
 
-The code is based on the [Console Component](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/console.html#console) and the [esp-idf-nat-example](https://github.com/jonask1337/esp-idf-nat-example). 
+The code is based on the [Console Component](https://docs.espressif.com/projects/esp-idf/en/latest/api-guides/console.html#console) and the [esp-idf-nat-example](https://github.com/jonask1337/esp-idf-nat-example).
+
+It is a fork of [martin-ger's esp32_nat_router](https://github.com/martin-ger/esp32_nat_router) to include support for the WT32-ETH01 ethernet port.
 
 ## Performance
 
