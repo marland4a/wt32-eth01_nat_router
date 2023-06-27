@@ -15,6 +15,7 @@ extern "C" {
 #include "cmd_system.h"
 #include "cmd_nvs.h"
 #include "cmd_router.h"
+#include "../components/ethernet/ethernet.h"
 
 #ifdef __cplusplus
 }

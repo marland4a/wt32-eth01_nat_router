@@ -24,6 +24,7 @@
 #include "freertos/event_groups.h"
 #include "esp_wifi.h"
 #include "esp_wpa2.h"
+#include "esp_private/wifi.h"
 
 #include "lwip/opt.h"
 #include "lwip/err.h"
@@ -327,12 +328,21 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
     {
         ESP_LOGI(TAG,"disconnected - retry to connect to the AP");
         ap_connect = false;
+
+        if(!ap_connect && ETHERNET_ENABLED) {     // Stop traffic forwarding
+            esp_wifi_internal_reg_rxcb(WIFI_IF_STA, NULL);
+        }
+
         esp_wifi_connect();
         ESP_LOGI(TAG, "retry to connect to the AP");
         xEventGroupClearBits(wifi_event_group, WIFI_CONNECTED_BIT);
     }
     else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP)
     {
+        if(!ap_connect && ETHERNET_ENABLED) {    // Start traffic forwarding
+            esp_wifi_internal_reg_rxcb(WIFI_IF_STA, eth_pkt_wifi2eth);
+        }
+
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
         ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
         ap_connect = true;
@@ -370,8 +380,6 @@ void wifi_init(const char* ssid, const char* ent_username, const char* ent_ident
 
     wifi_event_group = xEventGroupCreate();
   
-    esp_netif_init();
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
     wifiAP = esp_netif_create_default_wifi_ap();
     wifiSTA = esp_netif_create_default_wifi_sta();
 
@@ -465,7 +473,7 @@ void wifi_init(const char* ssid, const char* ent_username, const char* ent_ident
     dhcps_set_option_info(6, &dhcps_dns_value, sizeof(dhcps_dns_value));
 
     // Set custom dns server address for dhcp server
-    dnsserver.u_addr.ip4.addr = ipaddr_addr(DEFAULT_DNS);;
+    dnsserver.u_addr.ip4.addr = ipaddr_addr(DEFAULT_DNS);
     dnsserver.type = IPADDR_TYPE_V4;
     dhcps_dns_setserver(&dnsserver);
 
@@ -554,6 +562,16 @@ void app_main(void)
     }
 
     get_portmap_tab();
+
+    // Create event loop for wifi and ethernet
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    // Setup netif for wifi and ethernet (should be called only once in application)
+    esp_netif_init();
+
+    // Setup Ethernet if a device with ethernet port is specified
+    #if ETHERNET_ENABLED
+        ethernet_init();
+    #endif
 
     // Setup WIFI
     wifi_init(ssid, ent_username, ent_identity, passwd, static_ip, subnet_mask, gateway_addr, ap_ssid, ap_passwd, ap_ip);

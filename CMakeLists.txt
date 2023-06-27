@@ -4,3 +4,5 @@ cmake_minimum_required(VERSION 3.5)
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 project(esp32_nat_router)
+#link_directories(components/ethernet)
+#add_subdirectory(components/ethernet)
