@@ -579,7 +579,9 @@ void app_main(void)
     pthread_t t1;
     pthread_create(&t1, NULL, led_status_thread, NULL);
 
-    ip_napt_enable(my_ap_ip, 1);
+    //ip_napt_enable(my_ap_ip, 1);
+    ip_napt_enable_no(ESP_IF_ETH, 1);
+    ip_napt_enable_no(ESP_IF_WIFI_AP, 1);
     ESP_LOGI(TAG, "NAT is enabled");
 
     char* lock = NULL;

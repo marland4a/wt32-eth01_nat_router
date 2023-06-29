@@ -39,6 +39,7 @@ static const char *TAG = "EthernetSetup";                 // Tag displayed in se
 
 /*** Global Variables =============================== ***/
 static esp_eth_handle_t eth_handle = NULL;                // Handle to eth config
+static esp_netif_t* eth_netif = NULL;
 static bool eth_connected = false;                        // Whether the ethernet interface is up or down
 static QueueHandle_t flow_control_queue = NULL;
 
@@ -53,6 +54,8 @@ void ethernet_init(void);
 static esp_err_t init_flow_control(void);
 static void eth_event_handler(void *arg, esp_event_base_t event_base,
                               int32_t event_id, void *event_data);
+static void got_ip_event_handler(void *arg, esp_event_base_t event_base,
+                                 int32_t event_id, void *event_data);
 esp_err_t eth_pkt_wifi2eth(void* buffer, uint16_t len, void* eb);
 static esp_err_t eth_pkt_eth2wifi(esp_eth_handle_t eth_handle, uint8_t* buffer,
                               uint32_t len, void* priv);
@@ -77,6 +80,55 @@ void ethernet_init(void) {
   bool eth_promiscuous = true;
   ESP_ERROR_CHECK(esp_eth_ioctl(eth_handle, ETH_CMD_S_PROMISCUOUS, &eth_promiscuous));
   ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, eth_event_handler, NULL));
+
+  /* Initialize TCP/IP network interface */
+  //esp_netif_init();                                       // Initialize TCP/IP network interface (should be called only once in application)
+                                                            //   -> Moved to app_main()
+  esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();       // apply default network interface configuration for Ethernet
+  eth_netif = esp_netif_new(&cfg);                        // create network interface for Ethernet driver (global variable)
+
+  // Attach Ethernet driver to TCP/IP stack
+  ESP_ERROR_CHECK(
+    esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handle)) // attach Ethernet driver to TCP/IP stack
+  );
+
+  // Enable Flow control (request to pause transmission if peer sends too fast)
+  bool flow_ctrl_enable = true;
+  esp_eth_ioctl(eth_handle, ETH_CMD_S_FLOW_CTRL, &flow_ctrl_enable);
+
+
+  // Set interface hostname
+  //esp_netif_set_hostname(eth_netif, NAME);
+  // Set interface IP
+  //lan8720_eth_set_ip(ETH_IP_ADDR, ETH_IP_NETMASK, ETH_IP_GATEWAY);
+
+  // Set eth ip address and start DHCP server
+  //uint32_t my_ap_ip = ipaddr_addr(ap_ip);
+  uint32_t my_ap_ip = ipaddr_addr("192.168.3.1");
+  //lan8720_eth_set_ip((my_ap_ip & 0x00FFFFFF) | 0xFE000000, 0x00FFFFFF, my_ap_ip);
+  //lan8720_eth_set_ip(my_ap_ip, 0x00FFFFFF, my_ap_ip);
+  esp_netif_ip_info_t ipInfo_eth;
+  //ipInfo_eth.ip.addr = (my_ap_ip & 0xFFFFFF00) | 0xFE;   // Set eth ip to xxx.xxx.xxx.254
+  ipInfo_eth.ip.addr = my_ap_ip;
+  ipInfo_eth.gw.addr = my_ap_ip;
+  IP4_ADDR(&ipInfo_eth.netmask, 255,255,255,0);
+  esp_netif_dhcps_stop(eth_netif); // stop before setting ip
+  esp_netif_set_ip_info(eth_netif, &ipInfo_eth);
+  esp_netif_dhcps_start(eth_netif);
+  
+  /*/
+  dhcps_offer_t dhcps_dns_value = OFFER_DNS;
+  dhcps_set_option_info(6, &dhcps_dns_value, sizeof(dhcps_dns_value));
+  // Set custom dns server address for dhcp server
+  ip_addr_t dnsserver;
+  dnsserver.u_addr.ip4.addr = ipaddr_addr("8.8.8.8");
+  dnsserver.type = IPADDR_TYPE_V4;
+  dhcps_dns_setserver(&dnsserver);
+  */
+
+  esp_event_handler_register(IP_EVENT,
+        IP_EVENT_ETH_GOT_IP, &got_ip_event_handler, NULL);// Register Got-IP Event handler
+
   ESP_ERROR_CHECK(esp_eth_start(eth_handle));
 }
 
@@ -114,6 +166,20 @@ static void eth_event_handler(void *arg, esp_event_base_t event_base,
   default:
     break;
   }
+}
+
+/* Event handler for IP_EVENT_ETH_GOT_IP */
+static void got_ip_event_handler(void *arg, esp_event_base_t event_base,
+                                 int32_t event_id, void *event_data) {
+    ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
+    const esp_netif_ip_info_t *ip_info = &event->ip_info;
+
+    ESP_LOGI(TAG, "Ethernet Got IP Address");
+    ESP_LOGI(TAG, "~~~~~~~~~~~");
+    ESP_LOGI(TAG, "ETHIP:" IPSTR, IP2STR(&ip_info->ip));
+    ESP_LOGI(TAG, "ETHMASK:" IPSTR, IP2STR(&ip_info->netmask));
+    ESP_LOGI(TAG, "ETHGW:" IPSTR, IP2STR(&ip_info->gw));
+    ESP_LOGI(TAG, "~~~~~~~~~~~");
 }
 
 
